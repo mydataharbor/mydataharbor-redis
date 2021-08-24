@@ -1,4 +1,8 @@
 # mydataharbor-redis
+# 作者
+
+MyDataHarbor([1053618636@qq.com](mailto:1053618636@qq.com))
+
 # 项目介绍
 
 该项目是为MyDataHarbor实现redis的Sink，让使用者可以将数据写入redis。
