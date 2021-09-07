@@ -8,10 +8,6 @@
   </parent>
   <artifactId>redis-5.3.x-plugin</artifactId>
 
-  <description>
-    redis 5.3.x写入源插件
-  </description>
-
   <dependencies>
     <dependency>
       <groupId>io.lettuce</groupId>

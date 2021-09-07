@@ -9,10 +9,6 @@
   </parent>
   <artifactId>redis-6.0.x-plugin</artifactId>
 
-  <description>
-    redis 6.0.x写入源插件
-  </description>
-
   <dependencies>
     <dependency>
       <groupId>io.lettuce</groupId>
