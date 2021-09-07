@@ -204,57 +204,46 @@
 
 package mydataharbor.sink.redis;
 
-import mydataharbor.sink.redis.config.SingleRedisConfig;
-import mydataharbor.IDataSink;
+import mydataharbor.sink.redis.config.RedisConfig;
+import mydataharbor.sink.redis.entity.StringKeyValue;
+import mydataharbor.exception.ResetException;
 import mydataharbor.setting.BaseSettingContext;
-import io.lettuce.core.RedisClient;
-import io.lettuce.core.RedisURI;
-import io.lettuce.core.api.StatefulRedisConnection;
 
-import java.io.IOException;
-import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
- * 单机redis写入
+ * 单机redis 字符串 key/value
+ * 写入
  *
  * @auth xulang
  * @Date 2021/4/30
  **/
-public abstract class AbstractSingleRedisSink<R, S extends BaseSettingContext> implements IDataSink<R, S> {
+public class StringRedisSink extends AbstractRedisSink<StringKeyValue, BaseSettingContext> {
 
-  private final StatefulRedisConnection<String, String> conn;
-
-  private final RedisClient redisClient;
-
-  @Override
-  public String name() {
-    return "redis单机模式";
+  public StringRedisSink(RedisConfig redisConfig) {
+    super(redisConfig);
   }
 
-  public AbstractSingleRedisSink(SingleRedisConfig redisConfig) {
-    RedisURI.Builder builder = RedisURI.builder()
-      .withHost(redisConfig.getHost())
-      .withPort(redisConfig.getPort())
-      .withTimeout(Duration.ofMillis(redisConfig.getTimeout()));
-    if (redisConfig.isEnableAuth()) {
-      builder.withPassword(redisConfig.getAuth());
+  @Override
+  public WriterResult write(StringKeyValue record, BaseSettingContext settingContext) throws ResetException {
+    try {
+      String res = redisStringCommands().set(record.getKey(), record.getValue());
+      return WriterResult.builder().commit(true).msg(res).success(true).build();
+    } catch (Exception e) {
+       throw new ResetException("单条写入" + record + "失败", e);
     }
-    this.redisClient = RedisClient.create(builder.build());
-    this.conn = redisClient.connect();
   }
-
 
   @Override
-  public void close() throws IOException {
-    conn.close();
-    redisClient.shutdown();
-  }
-
-  protected StatefulRedisConnection<String, String> getConn() {
-    return conn;
-  }
-
-  protected RedisClient getRedisClient() {
-    return redisClient;
+  public WriterResult write(List<StringKeyValue> records, BaseSettingContext settingContext) throws ResetException {
+    try {
+      Map<String, String> map = records.parallelStream().collect(Collectors.toMap(StringKeyValue::getKey, StringKeyValue::getValue, (key1, key2) -> key2));
+      String mset = redisStringCommands().mset(map);
+      return WriterResult.builder().commit(true).success(true).msg(mset).build();
+    } catch (Exception e) {
+       throw new ResetException("批量写入" + records + "失败：" + e.getMessage(), e);
+    }
   }
 }

@@ -5,11 +5,11 @@
   <parent>
     <groupId>com.mydataharbor</groupId>
     <artifactId>mydataharbor-plugin-plugins</artifactId>
-    <version>1.0.2-SNAPSHOT</version>
+    <version>1.0.3-RELEASE</version>
   </parent>
   <artifactId>mydataharbor-redis-plugin</artifactId>
   <packaging>pom</packaging>
-  <description>redis plugin</description>
+  <description>redis 插件，支持连接单机，主从，哨兵，cluster模式的各种redis服务端，目前支持string数据格式的操作，有需要可以联系作者扩展：list、set、zset、hash</description>
 
   <version>1.1.0</version>
   <modules>
