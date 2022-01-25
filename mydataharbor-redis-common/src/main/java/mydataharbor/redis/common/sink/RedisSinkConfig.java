@@ -202,7 +202,7 @@
  * limitations under the License.
  */
 
-package mydataharbor.sink.redis.config;
+package mydataharbor.redis.common.sink;
 
 import mydataharbor.classutil.classresolver.MyDataHarborMarker;
 import lombok.AllArgsConstructor;
@@ -223,7 +223,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @SuperBuilder
-public class RedisConfig {
+public class RedisSinkConfig {
 
   @MyDataHarborMarker(title = "redis地址", des = "单机模式下配置一个即可。主从模式下，可以把主和从都配置进去，也可以配置一个，会自动发现。哨兵模式下，把所有的哨兵都配置进去。cluster模式下把所有的节点都配置进去。")
   private List<String> host;

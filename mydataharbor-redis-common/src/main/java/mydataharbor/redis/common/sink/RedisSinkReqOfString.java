@@ -202,7 +202,7 @@
  *    limitations under the License.
  */
 
-package mydataharbor.sink.redis.entity;
+package mydataharbor.redis.common.sink;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -219,7 +219,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class StringKeyValue {
+public class RedisSinkReqOfString {
   private String key;
   private String value;
 }

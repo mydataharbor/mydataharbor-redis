@@ -20,6 +20,7 @@
   <modules>
     <module>mydataharbor-sink-redis</module>
     <module>mydataharbor-redis-plugin</module>
+    <module>mydataharbor-redis-common</module>
   </modules>
 
 
