@@ -4,7 +4,7 @@
   <parent>
     <groupId>com.mydataharbor</groupId>
     <artifactId>mydataharbor-plugin</artifactId>
-    <version>1.0.2-SNAPSHOT</version>
+    <version>1.0.3-RELEASE</version>
   </parent>
   <artifactId>mydataharbor-redis</artifactId>
   <packaging>pom</packaging>
@@ -20,6 +20,7 @@
   <modules>
     <module>mydataharbor-sink-redis</module>
     <module>mydataharbor-redis-plugin</module>
+    <module>mydataharbor-redis-common</module>
   </modules>
 
 
