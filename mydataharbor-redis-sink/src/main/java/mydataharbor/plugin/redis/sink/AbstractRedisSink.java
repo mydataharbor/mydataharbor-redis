@@ -202,60 +202,136 @@
  * limitations under the License.
  */
 
-package mydataharbor.sink.redis;
+package mydataharbor.plugin.redis.sink;
 
-import lombok.extern.slf4j.Slf4j;
-import mydataharbor.exception.ResetException;
+import io.lettuce.core.AbstractRedisClient;
+import io.lettuce.core.api.StatefulConnection;
+import io.lettuce.core.api.sync.RedisListCommands;
+import io.lettuce.core.api.sync.RedisSetCommands;
+import io.lettuce.core.api.sync.RedisStringCommands;
+import io.lettuce.core.cluster.RedisClusterClient;
+import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
+import io.lettuce.core.codec.StringCodec;
+import io.lettuce.core.masterreplica.MasterReplica;
+import io.lettuce.core.masterreplica.StatefulRedisMasterReplicaConnection;
+import mydataharbor.IDataSink;
 import mydataharbor.redis.common.sink.RedisSinkConfig;
-import mydataharbor.redis.common.sink.RedisSinkReqOfString;
 import mydataharbor.setting.BaseSettingContext;
+import io.lettuce.core.RedisClient;
+import io.lettuce.core.RedisURI;
+import io.lettuce.core.api.StatefulRedisConnection;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.time.Duration;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
- * 单机redis 字符串 key/value
- * 写入
+ * redis写入
  *
  * @auth xulang
  * @Date 2021/4/30
  **/
-@Slf4j
-public class RedisSinkOfString extends AbstractRedisSink<RedisSinkReqOfString, BaseSettingContext> {
+public abstract class AbstractRedisSink<R, S extends BaseSettingContext> implements IDataSink<R, S> {
 
-  public RedisSinkOfString(RedisSinkConfig redisSinkConfig) {
-    super(redisSinkConfig);
-  }
+  private StatefulConnection<String, String> connection;
+
+  private AbstractRedisClient abstractRedisClient;
+
+  private RedisSinkConfig redisSinkConfig;
 
   @Override
-  public WriterResult write(RedisSinkReqOfString record, BaseSettingContext settingContext) throws ResetException {
-    try {
-      String res = redisStringCommands().set(record.getKey(), record.getValue());
-      return WriterResult.builder().commit(true).msg(res).success(true).build();
-    } catch (Exception e) {
-      if (e instanceof IOException)
-        throw new ResetException("单条写入" + record + "失败", e);
-      else {
-        return WriterResult.builder().commit(true).msg(e.getMessage()).success(false).build();
+  public String name() {
+    return "redis写入器";
+  }
+
+  public AbstractRedisSink(RedisSinkConfig redisSinkConfig) {
+    this.redisSinkConfig = redisSinkConfig;
+    Set<RedisURI> uris = new HashSet<>();
+    for (int i = 0; i < redisSinkConfig.getHost().size(); i++) {
+      RedisURI.Builder builder = RedisURI.builder()
+        .withTimeout(Duration.ofMillis(redisSinkConfig.getTimeout()));
+      if (redisSinkConfig.isEnableAuth()) {
+        builder.withPassword((CharSequence) redisSinkConfig.getAuth());
       }
+      if (redisSinkConfig.getRedisClusterType().equals(RedisSinkConfig.RedisClusterType.SENTINEL)) {
+        builder.withSentinel(redisSinkConfig.getHost().get(i), redisSinkConfig.getPort().get(i));
+        builder.withSentinelMasterId(redisSinkConfig.getMasterId());
+      } else {
+        builder.withHost(redisSinkConfig.getHost().get(i)).withPort(redisSinkConfig.getPort().get(i));
+      }
+      RedisURI redisURI = builder.build();
+      uris.add(redisURI);
+    }
+    switch (redisSinkConfig.getRedisClusterType()) {
+      case SINGLE:
+        RedisURI[] redisURIS = uris.toArray(new RedisURI[uris.size()]);
+        RedisClient redisClient = RedisClient.create(redisURIS[0]);
+        connection = redisClient.connect();
+        abstractRedisClient = redisClient;
+        break;
+      case MASTER_REPLICA:
+      case SENTINEL:
+        RedisClient client = RedisClient.create();
+        connection = MasterReplica.connect(client, StringCodec.UTF8, uris);
+        abstractRedisClient = client;
+        break;
+      case CLUSTER:
+        RedisClusterClient redisClusterClient = RedisClusterClient.create(uris);
+        connection = redisClusterClient.connect();
+        abstractRedisClient = redisClusterClient;
+        break;
+
     }
   }
 
-  @Override
-  public WriterResult write(List<RedisSinkReqOfString> records, BaseSettingContext settingContext) throws ResetException {
+  private <T extends StatefulConnection<String, String>> T borrowConn(Class<T> clazz) {
     try {
-      Map<String, String> map = records.parallelStream().collect(Collectors.toMap(RedisSinkReqOfString::getKey, RedisSinkReqOfString::getValue, (key1, key2) -> key2));
-      String mset = redisStringCommands().mset(map);
-      return WriterResult.builder().commit(true).success(true).msg(mset).build();
+      return clazz.cast(connection);
     } catch (Exception e) {
-      log.error("数据写入redis失败！", e);
-      if (e instanceof IOException)
-        throw new ResetException("批量写入" + records + "失败：" + e.getMessage(), e);
-      else {
-        return WriterResult.builder().commit(true).msg(e.getMessage()).success(false).build();
-      }
+      throw new RuntimeException("获取连接异常：" + e.getMessage(), e);
     }
+  }
+
+  private <T> T commandsCast(Class<T> clazz, boolean sync) {
+    switch (redisSinkConfig.getRedisClusterType()) {
+      case SINGLE:
+        if (sync)
+          return clazz.cast(borrowConn(StatefulRedisConnection.class).sync());
+        else
+          return clazz.cast(borrowConn(StatefulRedisConnection.class).async());
+      case CLUSTER:
+        if (sync)
+          return clazz.cast(borrowConn(StatefulRedisClusterConnection.class).sync());
+        else
+          return clazz.cast(borrowConn(StatefulRedisClusterConnection.class).async());
+      case MASTER_REPLICA:
+      case SENTINEL:
+        if (sync)
+          return clazz.cast(borrowConn(StatefulRedisMasterReplicaConnection.class).sync());
+        else
+          return clazz.cast(borrowConn(StatefulRedisMasterReplicaConnection.class).async());
+    }
+    throw new RuntimeException("获取redis common失败！");
+  }
+
+
+  public RedisStringCommands<String, String> redisStringCommands() throws Exception {
+    return commandsCast(RedisStringCommands.class, true);
+  }
+
+  public RedisListCommands<String, String> redisListCommands() throws Exception {
+    return commandsCast(RedisListCommands.class, true);
+  }
+
+  public RedisSetCommands<String, String> redisSetCommands() throws Exception {
+    return commandsCast(RedisSetCommands.class, true);
+  }
+
+
+  @Override
+  public void close() throws IOException {
+    connection.close();
+    abstractRedisClient.shutdown();
   }
 }
